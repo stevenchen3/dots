@@ -98,7 +98,7 @@ However, how to adjust Linux kernel settings is not the primary focus for this d
 I'd like to deep dive into memory-mapped file IO.
 
 
-## How computer accesses I/O devices
+## How does computer access I/O devices?
 
 Under the von Neumann model, three major components of a computer system: CPU, main memory and I/O
 devices are connected through Bus. And there're two complementary approaches of performing I/O
@@ -115,4 +115,31 @@ memory. Therefore, CPU can address both memory and I/O devices using the same in
 same address space. For example, when we type a key in our keyboard, the input of such key will go
 to the address that is mapped to the key, and later CPU is able to read from that address.
 
-## How does file read and write work?
+
+## How does program access files?
+
+Without loss of generality, let's take Linux as an example. Programs running on Linux make system
+calls to access files in the file system, e.g., `read()`, `write()`, `mmap()`. These system calls
+eventually translate into CPU instructions to access target files on the I/O devices (e.g., disks).
+
+Most programming languages by default call `read()` and `write()` to access files in the file system.
+When making a `read()` system call, the operating system first reads bytes from disks to memory in
+the kernel space and then copies these bytes to the memory to user space. If all the requested data
+are in the page cache, the kernel will copy it over the user space immediately, otherwise, it blocks
+the calling thread, arranges the disk to read requested data into page cache. When the requested
+data becomes available in the page cache, it resumes calling thread and copies the data.
+
+On the other hand, `mmap()` directly maps memory pages to bytes on disk in the user space. Whenever
+there's a page fault for memory-mapped file, the kernel puts the calling thread to sleep and makes
+the hard drive seek to the appropriate block and read the data.
+
+Both `read()/write()` and `mmap()` defer I/O scheduling, thread scheduling and I/O alignment (all
+I/O must be performed in multiples of the storage device's block size, usually 4KB) to the kernel.
+In addition, `mmap()` requires memory for maintaining a page table for page eviction. There're other
+alternatives to perform file I/O that defers most responsibilities to user. See [this
+thread](https://www.scylladb.com/2017/10/05/io-access-methods-scylla/)
+
+
+# References
+
+- https://www.scylladb.com/2017/10/05/io-access-methods-scylla/
