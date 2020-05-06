@@ -1,0 +1,34 @@
+kind: DaemonSet
+apiVersion: extensions/v1beta1
+metadata:
+  name: startup-scripts
+  labels:
+    app: startup-scripts
+spec:
+  template:
+    metadata:
+      labels:
+        app: startup-scripts
+    spec:
+      hostPID: true
+      containers:
+      - name: startup-scripts
+        image: gcr.io/google-containers/startup-script:v1
+        imagePullPolicy: Always
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            memory: 16Mi
+            cpu: 16m
+          limits:
+            memory: 16Mi
+            cpu: 16m
+        env:
+        - name: STARTUP_SCRIPT
+          value: |
+            #! /bin/bash
+            sudo sysctl -w vm.max_map_count=262144
+            sudo sysctl -n vm.max_map_count
+            sudo touch /etc/sysctl.d/custom.conf
+            sudo echo "vm.max_map_count=262144" > /etc/sysctl.d/custom.conf

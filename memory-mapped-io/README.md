@@ -54,44 +54,11 @@ sudo echo "vm.max_map_count=262144" > /etc/sysctl.d/custom.conf
 
 Some Kubernetes services won't allow users to change Kubernetes nodes' setting using startup
 scripts (e.g., Google Kubernetes Engine). In such case, we could run a DaemonSet to achieve the
-goal.
+goal. See `daemonset.yaml`
 
 
-```yaml
-kind: DaemonSet
-apiVersion: extensions/v1beta1
-metadata:
-  name: startup-scripts
-  labels:
-    app: startup-scripts
-spec:
-  template:
-    metadata:
-      labels:
-        app: startup-scripts
-    spec:
-      hostPID: true
-      containers:
-      - name: startup-scripts
-        image: gcr.io/google-containers/startup-script:v1
-        imagePullPolicy: Always
-        securityContext:
-          privileged: true
-        resources:
-          requests:
-            memory: 16Mi
-            cpu: 16m
-          limits:
-            memory: 16Mi
-            cpu: 16m
-        env:
-        - name: STARTUP_SCRIPT
-          value: |
-            #! /bin/bash
-            sudo sysctl -w vm.max_map_count=262144
-            sudo sysctl -n vm.max_map_count
-            sudo touch /etc/sysctl.d/custom.conf
-            sudo echo "vm.max_map_count=262144" > /etc/sysctl.d/custom.conf
+```bash
+kubectl apply -f daemonset.yaml
 ```
 
 However, how to adjust Linux kernel settings is not the primary focus for this discussion. Instead,
@@ -148,52 +115,12 @@ thread](https://www.scylladb.com/2017/10/05/io-access-methods-scylla/).
 
 ## Perform file I/O using `mmap`
 
-In this simple example, we will illustrate how to use `mmap` system call to perform file I/O.
+In this simple example, we will illustrate how to use `mmap` system call to perform file I/O. See
+`mmapread.cc`
 
-```c++
-#include <assert.h>
-#include <fcntl.h>      // flags: O_RDONLY
-#include <unistd.h>     // close(), write
-#include <sys/mman.h>   // includes 'mmap', see "man mmap"
-#include <sys/stat.h>   // POSIX header, includes 'stat'
-
-//
-// To compile: clang++ -std=c++11 mmap-read.cc -o mmap-read
-//
-int main(int argc, char **argv) {
-  // stat is a system struct that is defined to store information about files
-  struct stat st;
-  stat(argv[1], &st);         // ignore args checks here
-  size_t length = st.st_size; // Read the file size
-
-  // Open the given file and have its file descriptor
-  int fd = open(argv[1], O_RDONLY, 0);
-  assert(fd != -1);
-
-  // Execute the mmap: move the entire content of the given file into memory,
-  // if its size bigger than actual physical or available memory, then operating
-  // system would use virutal memory (page-in and page-out may happen)
-  //
-  // nullptr     := address hint, nullptr means no preference on the address and
-  //                let the os decide
-  // length      := total # of bytes of data load into memory
-  // PROT_READ   := protection mode, in this case, read-only
-  // MAP_PRIVATE := flags, in this case, modifications are private to the process
-  // fd          := file descriptor
-  // 0           := offset, 0 means we read from the beginning of the file
-  void *ptr = mmap(nullptr, length, PROT_READ, MAP_PRIVATE, fd, 0);
-  assert(ptr != MAP_FAILED);
-
-  // Write the mmapped ptr to stdout (= FD #1)
-  write(1, ptr, length);
-
-  // Clean up: remove a mapping
-  assert(munmap(ptr, length) == 0);
-
-  close(fd); // close the file
-
-  return EXIT_SUCCESS;
-}
+```bash
+clang++ -std=c++11 mmap-read.cc -o mmapread
+mmapread /path/to/file
 ```
 
 
