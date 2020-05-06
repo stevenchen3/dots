@@ -29,7 +29,7 @@ access, which by default is 65535. And in our case, we exceeded this limit. And 
 limit would ease the problem. In order to increase this memory map limit, we could use one of the
 following two approaches:
 
-- Ephemeral setting using `sysctl` command
+### Ephemeral setting using `sysctl` command
 
 If using containers, this needs to be done on the host instead of the containers. The new setting
 applies only to newly launched processes or containers. And if the server somehow restarts, this
@@ -40,7 +40,7 @@ sudo sysctl -w vm.max_map_count=262144
 sudo sysctl -n vm.max_map_count
 ```
 
-- Permanent setting on the server
+### Permanent setting on the server
 
 The new setting won't take effect until the server restarts, thus we could use above commands to
 apply ephemeral setting to avoid server restarts.
@@ -50,7 +50,7 @@ sudo touch /etc/sysctl.d/custom.conf
 sudo echo "vm.max_map_count=262144" > /etc/sysctl.d/custom.conf
 ```
 
-- Use DaemonSet for Kubernetes
+### Use DaemonSet for Kubernetes
 
 Some Kubernetes services won't allow users to change Kubernetes nodes' setting using startup
 scripts (e.g., Google Kubernetes Engine). In such case, we could run a DaemonSet to achieve the
@@ -96,3 +96,21 @@ spec:
 
 However, how to adjust Linux kernel settings is not the primary focus for this discussion. Instead,
 I'd like to deep dive into memory-mapped file IO.
+
+
+## How computer accesses I/O devices
+
+Under the von Neumann model, three major components of a computer system: CPU, main memory and I/O
+devices are connected through Bus. And there're two complementary approaches of performing I/O
+between CPU and I/O devices: (1) port-mapped I/O and (2) memory-mapped I/O (See [this wikipedia
+entry](https://en.wikipedia.org/wiki/Memory-mapped_I/O#Port_I/O_via_device_drivers)).
+
+For port-mapped I/O, CPU has limited set of instructions to interact between CPU registers and I/O
+device ports and those instructions are very CPU-specific. Recall that CPU uses instructions like
+`LDR` and `STR` to load and store data from and to registers to access memory in its address space.
+On the other hand, with memory-mapped I/O, the registers of I/O devices are mapped to memory
+addresses in the same address space the CPU uses. They're usually mapped to certain addresses
+reserved for I/O devices. When the Bus decodes an address, it knows whether it is an I/O device or
+memory. Therefore, CPU can address both memory and I/O devices using the same instructions in the
+same address space. For example, when we type a key in our keyboard, the input of such key will go
+to the address that is mapped to the key, and later CPU is able to read from that address.
