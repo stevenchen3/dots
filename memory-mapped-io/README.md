@@ -24,7 +24,7 @@ And this is not caused by insufficient heap or direct memory allocation to the J
 turns out the system uses low-level system kernel function (i.e., `mmap`) to achieve memory-mapped file
 access to read a large number of files whose size does not fit into memory either. So the operating
 system would use virtual memory. However, Linux kernel has a limit (i.e., [vm.max_map_count](
-https://www.kernel.org/doc/Documentation/sysctl/vm.txt))for how many memory map areas a process can
+https://www.kernel.org/doc/Documentation/sysctl/vm.txt)) for how many memory map areas a process can
 access, which by default is 65535. And in our case, we exceeded this limit. And increasing such
 limit would ease the problem. In order to increase this memory map limit, we could use one of the
 following two approaches:
@@ -114,3 +114,5 @@ reserved for I/O devices. When the Bus decodes an address, it knows whether it i
 memory. Therefore, CPU can address both memory and I/O devices using the same instructions in the
 same address space. For example, when we type a key in our keyboard, the input of such key will go
 to the address that is mapped to the key, and later CPU is able to read from that address.
+
+## How does file read and write work?
