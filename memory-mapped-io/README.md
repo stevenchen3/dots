@@ -21,7 +21,7 @@ OpenJDK 64-Bit Server VM warning: INFO: os::commit_memory(0x00007f6f738a1000, 26
 ```
 
 And this is not caused by insufficient heap or direct memory allocation to the Java process. It
-turns the system uses low-level system kernel function (i.e., `mmap`) to achieve memory-mapped file
+turns out the system uses low-level system kernel function (i.e., `mmap`) to achieve memory-mapped file
 access to read a large number of files whose size does not fit into memory either. So the operating
 system would use virtual memory. However, Linux kernel has a limit (i.e., [vm.max_map_count](
 https://www.kernel.org/doc/Documentation/sysctl/vm.txt))for how many memory map areas a process can
