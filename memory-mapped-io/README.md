@@ -61,6 +61,11 @@ goal. See `daemonset.yaml`
 kubectl apply -f daemonset.yaml
 ```
 
+The side-effect of increasing the `vm.max_map_count` is that processes (or containers) now are
+potentially able access more system memory, especially for JVM process that it means JVM process is
+able access more than what's allocated (including heap and direct memory). But, whether a process
+will do depends on the amount of data it accesses.
+
 However, how to adjust Linux kernel settings is not the primary focus for this discussion. Instead,
 I'd like to deep dive into memory-mapped file IO.
 
@@ -104,7 +109,7 @@ performance of `mmap` is unstable, especially for small files. But, for large fi
 are mapped into memory, you can access the entire through an array. Using `read()/write()`, however,
 we can only access the file per buffer size each time and iterate for multiple times in order to get
 its full content. Arguably, we could set a bigger buffer, but the overhead of the additional copy
-between the kernel space and user space cann't be neglected in such case.
+between the kernel space and user space can't be neglected in such case.
 
 Both `read()/write()` and `mmap()` defer I/O scheduling, thread scheduling and I/O alignment (all
 I/O must be performed in multiples of the storage device's block size, usually 4KB) to the kernel.
@@ -119,6 +124,9 @@ In this simple example, we will illustrate how to use `mmap` system call to perf
 `mmapread.cc`
 
 ```bash
+# Check out `mmap()` API doc
+man mmap
+
 clang++ -std=c++11 mmap-read.cc -o mmapread
 mmapread /path/to/file
 ```
