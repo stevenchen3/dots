@@ -127,8 +127,9 @@ In this simple example, we will illustrate how to use `mmap` system call to perf
 # Check out `mmap()` API doc
 man mmap
 
-clang++ -std=c++11 mmap-read.cc -o mmapread
-mmapread /path/to/file
+clang++ -std=c++11 mmapcopy.cc -o mmapcopy
+# Copy file
+mmapcopy /path/to/source/file /path/to/destination/file
 ```
 
 
