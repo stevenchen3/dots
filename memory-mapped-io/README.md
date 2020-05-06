@@ -131,15 +131,22 @@ data becomes available in the page cache, it resumes calling thread and copies t
 
 On the other hand, `mmap()` directly maps memory pages to bytes on disk in the user space. Whenever
 there's a page fault for memory-mapped file, the kernel puts the calling thread to sleep and makes
-the hard drive seek to the appropriate block and read the data.
+the hard drive seek to the appropriate block and read the data. Without extra copy, `mmap()` should
+potentially perform faster than traditional `read()/write()`, however, studies suggest that the
+performance of `mmap` is unstable, especially for small files. But, for large files, once the files
+are mapped into memory, you can access the entire through an array. Using `read()/write()`, however,
+we can only access the file per buffer size each time and iterate for multiple times in order to get
+its full content. Arguably, we could set a bigger buffer, but the overhead of the additional copy
+between the kernel space and user space cann't be neglected in such case.
 
 Both `read()/write()` and `mmap()` defer I/O scheduling, thread scheduling and I/O alignment (all
 I/O must be performed in multiples of the storage device's block size, usually 4KB) to the kernel.
 In addition, `mmap()` requires memory for maintaining a page table for page eviction. There're other
 alternatives to perform file I/O that defers most responsibilities to user. See [this
-thread](https://www.scylladb.com/2017/10/05/io-access-methods-scylla/)
+thread](https://www.scylladb.com/2017/10/05/io-access-methods-scylla/).
 
 
 # References
 
 - https://www.scylladb.com/2017/10/05/io-access-methods-scylla/
+- https://lemire.me/blog/2012/06/26/which-is-fastest-read-fread-ifstream-or-mmap/
