@@ -182,29 +182,14 @@ clang -o fcopy fcopy.c
 Next, let's generate some files of different sizes with random bytes.
 
 ```bash
-#!/bin/bash
+# on Mac OS, we can use 'dd', example
+dd if=/dev/urandom bs=1024 count=8192     of=8mb_file   conv=notrunc
 
-# on Mac OS
-dd if=/dev/urandom bs=1024 count=8192    of=8mb_file   conv=notrunc
-dd if=/dev/urandom bs=1024 count=32768   of=32mb_file  conv=notrunc
-dd if=/dev/urandom bs=1024 count=131072  of=128mb_file conv=notrunc
-dd if=/dev/urandom bs=1024 count=524288  of=512mb_file conv=notrunc
-dd if=/dev/urandom bs=1024 count=1048576 of=1gb_file   conv=notrunc
-dd if=/dev/urandom bs=1024 count=2097152 of=2gb_file   conv=notrunc
-dd if=/dev/urandom bs=1024 count=4194304 of=4gb_file   conv=notrunc
+# generate files of sizes range from 8MB to 10 GB
+bash datagen.sh
 
-prefixes="8mb 32mb 128mb 512mb 1gb 2gb 4gb"
-for p in ${prefixes}; do
-  echo "mmap copy ${p}"
-  rm -f "${p}_file_copy"
-  time ./mmapcopy ${p}_file ${p}_file_copy
-done
-
-for p in ${prefixes}; do
-  echo "fcopy ${p}"
-  rm -f "${p}_file_copy"
-  time ./fcopy ${p}_file ${p}_file_copy
-done
+# run the micro benchmark
+bash benchmark.sh
 ```
 
 
