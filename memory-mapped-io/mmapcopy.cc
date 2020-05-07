@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <fcntl.h>      // flags: O_RDONLY
+#include <iostream>
 #include <unistd.h>     // close(), write
 #include <string.h>
 #include <sys/mman.h>   // includes 'mmap', see "man mmap"
@@ -46,5 +47,7 @@ int main(int argc, char **argv) {
   close(src_fd); // close the file
   close(dst_fd); // close the file
 
-  return EXIT_SUCCESS;
+  std::cout << "Total " << length << " bytes copied\n";
+
+  return 0;
 }

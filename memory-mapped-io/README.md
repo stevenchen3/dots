@@ -39,8 +39,13 @@ FileChannel channel = file.getChannel();
 
 // Get the direct byte buffer access using channel.map() operation.
 // There's no such API for "unmap()" in Java. As long as the "buffer"
-// object not garbage collected, the mapping remains valid
+// object is not garbage collected, the mapping remains valid
 MappedByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+
+// Output to stdout
+for (int i = 0; i < buffer.limit(); ++i) {
+  System.out.print((char) buffer.get());
+}
 
 channel.close();
 file.close();
@@ -56,7 +61,7 @@ limit would ease the problem.
 
 In order to increase this memory map limit, we could use one of the following approaches:
 
-#### Ephemeral setting using `sysctl` command
+- Ephemeral setting using `sysctl` command
 
 If using containers, this needs to be done on the host instead of the containers. The new setting
 applies only to newly launched processes or containers. And if the server somehow restarts, this
@@ -67,7 +72,7 @@ sudo sysctl -w vm.max_map_count=262144
 sudo sysctl -n vm.max_map_count
 ```
 
-#### Permanent setting on the server
+- Permanent setting on the server
 
 The new setting won't take effect until the server restarts, thus we could use above commands to
 apply ephemeral setting to avoid server restarts.
@@ -77,7 +82,7 @@ sudo touch /etc/sysctl.d/custom.conf
 sudo echo "vm.max_map_count=262144" > /etc/sysctl.d/custom.conf
 ```
 
-#### Use DaemonSet for Kubernetes
+- Use DaemonSet for Kubernetes
 
 Some Kubernetes engines won't allow users to change Kubernetes nodes' setting using startup
 scripts (e.g., Google Kubernetes Engine). In such case, we could run a `DaemonSet` to achieve the
@@ -160,6 +165,46 @@ man mmap
 clang++ -std=c++11 mmapcopy.cc -o mmapcopy
 # Copy file
 mmapcopy /path/to/source/file /path/to/destination/file
+```
+
+## Micro benchmark
+
+To have a sense of the performance between `read()/write()` and `mmap`, I also implemented a simple
+file copy program using C (see `fcopy.c`) that calls `fread()` and `fwrite()` system calls where
+each call reads/writes 4KB data.
+
+Let's compile first.
+
+```bash
+clang -o fcopy fcopy.c
+```
+
+Next, let's generate some files of different sizes with random bytes.
+
+```bash
+#!/bin/bash
+
+# on Mac OS
+dd if=/dev/urandom bs=1024 count=8192    of=8mb_file   conv=notrunc
+dd if=/dev/urandom bs=1024 count=32768   of=32mb_file  conv=notrunc
+dd if=/dev/urandom bs=1024 count=131072  of=128mb_file conv=notrunc
+dd if=/dev/urandom bs=1024 count=524288  of=512mb_file conv=notrunc
+dd if=/dev/urandom bs=1024 count=1048576 of=1gb_file   conv=notrunc
+dd if=/dev/urandom bs=1024 count=2097152 of=2gb_file   conv=notrunc
+dd if=/dev/urandom bs=1024 count=4194304 of=4gb_file   conv=notrunc
+
+prefixes="8mb 32mb 128mb 512mb 1gb 2gb 4gb"
+for p in ${prefixes}; do
+  echo "mmap copy ${p}"
+  rm -f "${p}_file_copy"
+  time ./mmapcopy ${p}_file ${p}_file_copy
+done
+
+for p in ${prefixes}; do
+  echo "fcopy ${p}"
+  rm -f "${p}_file_copy"
+  time ./fcopy ${p}_file ${p}_file_copy
+done
 ```
 
 
