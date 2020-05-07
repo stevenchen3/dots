@@ -192,6 +192,10 @@ bash datagen.sh
 bash benchmark.sh
 ```
 
+We run the micro benchmark on a Mac equipped with SSD and observe that there're large number of page
+faults when copying data using `mmap` and do not see any performance gain compared to
+copy using `fread()/fwrite()`, except that it simplifies application codes under certain scenarios.
+
 
 # References
 
