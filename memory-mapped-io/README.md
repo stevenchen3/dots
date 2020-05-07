@@ -21,15 +21,42 @@ OpenJDK 64-Bit Server VM warning: INFO: os::commit_memory(0x00007f6f738a1000, 26
 ```
 
 And this is not caused by insufficient heap or direct memory allocation to the Java process. It
-turns out the system uses low-level system kernel function (i.e., `mmap`) to achieve memory-mapped file
-access to read a large number of files whose size does not fit into memory either. So the operating
-system would use virtual memory. However, Linux kernel has a limit (i.e., [vm.max_map_count](
+turns out that our system uses low-level system call (i.e., `mmap`) to map pages in the file system
+to memory in the user space achieve read and write access to large number of relatively large files
+whose size does not fit into memory either. So the operating system will use virtual memory
+technique. One way of calling `mmap` to achieve memory-mapped file I/O is via the following Java
+libraries:
+
+```java
+import java.io.File;
+import java.io.RandomAccessFile;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+
+RandomAccessFile file = new RandomAccessFile(new File("/path/to/file"), "r");
+// Get the file channel in read-only mode
+FileChannel channel = file.getChannel();
+
+// Get the direct byte buffer access using channel.map() operation.
+// There's no such API for "unmap()" in Java. As long as the "buffer"
+// object not garbage collected, the mapping remains valid
+MappedByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+
+channel.close();
+file.close();
+```
+
+However, Linux kernel has a limit (i.e., [vm.max_map_count](
 https://www.kernel.org/doc/Documentation/sysctl/vm.txt)) for how many memory map areas a process can
 access, which by default is 65535. And in our case, we exceeded this limit. And increasing such
-limit would ease the problem. In order to increase this memory map limit, we could use one of the
-following two approaches:
+limit would ease the problem.
 
-### Ephemeral setting using `sysctl` command
+
+### How to tune kernel virtual memory settings?
+
+In order to increase this memory map limit, we could use one of the following approaches:
+
+#### Ephemeral setting using `sysctl` command
 
 If using containers, this needs to be done on the host instead of the containers. The new setting
 applies only to newly launched processes or containers. And if the server somehow restarts, this
@@ -40,7 +67,7 @@ sudo sysctl -w vm.max_map_count=262144
 sudo sysctl -n vm.max_map_count
 ```
 
-### Permanent setting on the server
+#### Permanent setting on the server
 
 The new setting won't take effect until the server restarts, thus we could use above commands to
 apply ephemeral setting to avoid server restarts.
@@ -50,11 +77,12 @@ sudo touch /etc/sysctl.d/custom.conf
 sudo echo "vm.max_map_count=262144" > /etc/sysctl.d/custom.conf
 ```
 
-### Use DaemonSet for Kubernetes
+#### Use DaemonSet for Kubernetes
 
-Some Kubernetes services won't allow users to change Kubernetes nodes' setting using startup
-scripts (e.g., Google Kubernetes Engine). In such case, we could run a DaemonSet to achieve the
-goal. See `daemonset.yaml`
+Some Kubernetes engines won't allow users to change Kubernetes nodes' setting using startup
+scripts (e.g., Google Kubernetes Engine). In such case, we could run a `DaemonSet` to achieve the
+goal. See `daemonset.yaml`. Whenever a new node added to Kubernetes node pool, the `DaemonSet`
+controller will run a pod on the newly added node to change the setting.
 
 
 ```bash
@@ -62,9 +90,9 @@ kubectl apply -f daemonset.yaml
 ```
 
 The side-effect of increasing the `vm.max_map_count` is that processes (or containers) now are
-potentially able access more system memory, especially for JVM process that it means JVM process is
-able access more than what's allocated (including heap and direct memory). But, whether a process
-will do depends on the amount of data it accesses.
+able to make more `mmap` calls and potentially access more system memory, especially for JVM
+process that it means JVM process is able access more than what's allocated (including heap and
+direct memory) to it. But, whether a process will do depends on the amount of data it accesses.
 
 However, how to adjust Linux kernel settings is not the primary focus for this discussion. Instead,
 I'd like to deep dive into memory-mapped file IO.
@@ -88,7 +116,7 @@ same address space. For example, when we type a key in our keyboard, the input o
 to the address that is mapped to the key, and later CPU is able to read from that address.
 
 
-## How does program access files?
+## How does user process perform file I/O?
 
 Without loss of generality, let's take Linux as an example. Programs running on Linux make system
 calls to access files in the file system, e.g., `read()`, `write()`, `mmap()`. These system calls
@@ -96,20 +124,22 @@ eventually translate into CPU instructions to access target files on the I/O dev
 
 Most programming languages by default call `read()` and `write()` to access files in the file system.
 When making a `read()` system call, the operating system first reads bytes from disks to memory in
-the kernel space and then copies these bytes to the memory to user space. If all the requested data
+the kernel space and then copies these bytes to the memory in user space. If all the requested data
 are in the page cache, the kernel will copy it over the user space immediately, otherwise, it blocks
-the calling thread, arranges the disk to read requested data into page cache. When the requested
-data becomes available in the page cache, it resumes calling thread and copies the data.
+the calling thread, arranges the disk to seek to appropriate block and read requested data into page
+cache. When the requested data becomes available in the page cache, it resumes calling thread and
+copies the requested data.
 
 On the other hand, `mmap()` directly maps memory pages to bytes on disk in the user space. Whenever
 there's a page fault for memory-mapped file, the kernel puts the calling thread to sleep and makes
-the hard drive seek to the appropriate block and read the data. Without extra copy, `mmap()` should
-potentially perform faster than traditional `read()/write()`, however, studies suggest that the
-performance of `mmap` is unstable, especially for small files. But, for large files, once the files
-are mapped into memory, you can access the entire through an array. Using `read()/write()`, however,
-we can only access the file per buffer size each time and iterate for multiple times in order to get
-its full content. Arguably, we could set a bigger buffer, but the overhead of the additional copy
-between the kernel space and user space can't be neglected in such case.
+the hard drive seek to the appropriate block and read the data. Without extra copy between kernel
+space and user space, `mmap()` should potentially perform faster than traditional `read()/write()`,
+however, studies suggest that the performance of `mmap` is unstable, especially for small files.
+But, for large files, once the files are mapped into memory, we can manipulate it as a large array
+which is handy for some cases. Using `read()/write()`, however, we can only access the file per
+buffer size each time and iterate for multiple times in order to get its full content. Arguably, we
+could set a bigger buffer, but the overhead of the additional copy between the kernel space and user
+space can't be neglected in such case.
 
 Both `read()/write()` and `mmap()` defer I/O scheduling, thread scheduling and I/O alignment (all
 I/O must be performed in multiples of the storage device's block size, usually 4KB) to the kernel.
