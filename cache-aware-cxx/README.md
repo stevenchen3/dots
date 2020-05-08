@@ -74,13 +74,13 @@ struct Bar {
 
 ## False sharing
 
-Given below example, there's nothing shared between threads. Supposedly, the runtime between program
-1 and program 2 should be roughly the same in a multi-core computer. However, program 2 actually
-runs twice slower than program 1. Recall data alignment that how memory looks like (which is like as
-multiple cache lines. In a computer with cache line of 64 bytes, variables a, b, c, d are aligned
-with cache line (in the same cache line). Therefore, we can't really take the advantage of
-multi-cores here. One way to prevent this is to align the data with cache line, i.e., `alignas(64)
-std::atomic<int> a;`
+Given below example, there's nothing shared between threads. Supposedly, the runtime between using
+1 thread and 4 threads should be roughly the same in a multi-core computer. However, running 4
+threads actually is slower than executing 4 threads separately. Recall data alignment that how
+memory looks like (which is like as multiple cache lines. In a computer with cache line of 64 bytes,
+variables a, b, c, d are aligned with cache line (in the same cache line). Therefore, we can't
+really take the advantage of multi-cores here. One way to prevent this is to align the data with
+cache line, i.e., `alignas(64) std::atomic<int> a;`
 
 ```c++
 void do_work(std::atomic<int> &a) {
@@ -89,20 +89,6 @@ void do_work(std::atomic<int> &a) {
   }
 }
 
-// program 1
-int main() {
-  std::atomic<int> a; a = 0;
-  std::atomic<int> b; b = 0;
-
-  std::thread t1([&]() { do_work(a); });
-  std::thread t2([&]() { do_work(a); });
-
-  t1.join();
-  t2.join();
-  return 0;
-}
-
-// program 2
 int main() {
   std::atomic<int> a; a = 0;
   std::atomic<int> b; b = 0;
