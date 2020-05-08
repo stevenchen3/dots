@@ -21,11 +21,11 @@ OpenJDK 64-Bit Server VM warning: INFO: os::commit_memory(0x00007f6f738a1000, 26
 ```
 
 And this is not caused by insufficient heap or direct memory allocation to the Java process. It
-turns out that our system uses low-level system call (i.e., `mmap`) to map pages in the file system
-to memory in the user space achieve read and write access to large number of relatively large files
-whose size does not fit into memory either. So the operating system will use virtual memory
-technique. One way of calling `mmap` to achieve memory-mapped file I/O is via the following Java
-libraries:
+turns out that our system uses low-level system call (i.e., `mmap(2)`, see `man 2 mmap`) to map
+pages in the file system to memory in the user space achieve read and write access to large number
+of relatively large files whose size does not fit into memory either. So the operating system will
+use virtual memory technique. One way of calling `mmap(2)` to achieve memory-mapped file I/O is via
+the following Java libraries:
 
 ```java
 import java.io.File;
@@ -95,7 +95,7 @@ kubectl apply -f daemonset.yaml
 ```
 
 The side-effect of increasing the `vm.max_map_count` is that processes (or containers) now are
-able to make more `mmap` calls and potentially access more system memory, especially for JVM
+able to make more `mmap(2)` calls and potentially access more system memory, especially for JVM
 process that it means JVM process is able access more than what's allocated (including heap and
 direct memory) to it. But, whether a process will do depends on the amount of data it accesses.
 
@@ -124,31 +124,31 @@ to the address that is mapped to the key, and later CPU is able to read from tha
 ## How does user process perform file I/O?
 
 Without loss of generality, let's take Linux as an example. Programs running on Linux make system
-calls to access files in the file system, e.g., `read()`, `write()`, `mmap()`. These system calls
+calls to access files in the file system, e.g., `read(2)`, `write(2)`, `mmap(2)`. These system calls
 eventually translate into CPU instructions to access target files on the I/O devices (e.g., disks).
 
-Most programming languages by default call `read()` and `write()` to access files in the file system.
-When making a `read()` system call, the operating system first reads bytes from disks to memory in
+Most programming languages by default call `read(2)` and `write(2)` to access files in the file system.
+When making a `read(2)` system call, the operating system first reads bytes from disks to memory in
 the kernel space and then copies these bytes to the memory in user space. If all the requested data
 are in the page cache, the kernel will copy it over the user space immediately, otherwise, it blocks
 the calling thread, arranges the disk to seek to appropriate block and read requested data into page
 cache. When the requested data becomes available in the page cache, it resumes calling thread and
 copies the requested data.
 
-On the other hand, `mmap()` directly maps memory pages to bytes on disk in the user space. Whenever
+On the other hand, `mmap(2)` directly maps memory pages to bytes on disk in the user space. Whenever
 there's a page fault for memory-mapped file, the kernel puts the calling thread to sleep and makes
 the hard drive seek to the appropriate block and read the data. Without extra copy between kernel
-space and user space, `mmap()` should potentially perform faster than traditional `read()/write()`,
+space and user space, `mmap(2)` should potentially perform faster than traditional `read(2)/write(2)`,
 however, studies suggest that the performance of `mmap` is unstable, especially for small files.
 But, for large files, once the files are mapped into memory, we can manipulate it as a large array
-which is handy for some cases. Using `read()/write()`, however, we can only access the file per
+which is handy for some cases. Using `read(2)/write(2)`, however, we can only access the file per
 buffer size each time and iterate for multiple times in order to get its full content. Arguably, we
 could set a bigger buffer, but the overhead of the additional copy between the kernel space and user
 space can't be neglected in such case.
 
-Both `read()/write()` and `mmap()` defer I/O scheduling, thread scheduling and I/O alignment (all
+Both `read(2)/write(2)` and `mmap(2)` defer I/O scheduling, thread scheduling and I/O alignment (all
 I/O must be performed in multiples of the storage device's block size, usually 4KB) to the kernel.
-In addition, `mmap()` requires memory for maintaining a page table for page eviction. There're other
+In addition, `mmap(2)` requires memory for maintaining a page table for page eviction. There're other
 alternatives to perform file I/O that defers most responsibilities to user. See [this
 thread](https://www.scylladb.com/2017/10/05/io-access-methods-scylla/).
 
@@ -159,8 +159,8 @@ In this simple example, we will illustrate how to use `mmap` system call to perf
 `mmapread.cc`
 
 ```bash
-# Check out `mmap()` API doc
-man mmap
+# Check out `mmap(2)` API doc
+man 2 mmap
 
 clang++ -std=c++11 mmapcopy.cc -o mmapcopy
 # Copy file
@@ -169,8 +169,8 @@ mmapcopy /path/to/source/file /path/to/destination/file
 
 ## Micro benchmark
 
-To have a sense of the performance between `read()/write()` and `mmap`, I also implemented a simple
-file copy program using C (see `fcopy.c`) that calls `fread()` and `fwrite()` system calls where
+To have a sense of the performance between `read(2)/write(2)` and `mmap`, I also implemented a simple
+file copy program using C (see `fcopy.c`) that calls `fread(3)` and `fwrite(3)` system calls where
 each call reads/writes 4KB data.
 
 Let's compile first.
@@ -183,7 +183,7 @@ Next, let's generate some files of different sizes with random bytes.
 
 ```bash
 # on Mac OS, we can use 'dd', example
-dd if=/dev/urandom bs=1024 count=8192     of=8mb_file   conv=notrunc
+dd if=/dev/urandom bs=1024 count=8192 of=8mb_file conv=notrunc
 
 # generate files of sizes range from 8MB to 10 GB
 bash datagen.sh
@@ -194,7 +194,7 @@ bash benchmark.sh
 
 We run the micro benchmark on a Mac equipped with SSD and observe that there're large number of page
 faults when copying data using `mmap` and do not see any performance gain compared to
-copy using `fread()/fwrite()`, except that it simplifies application codes under certain scenarios.
+copy using `fread(3)/fwrite(3)`, except that it simplifies application codes under certain scenarios.
 
 
 # References
