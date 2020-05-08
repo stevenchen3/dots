@@ -139,7 +139,7 @@ On the other hand, `mmap(2)` directly maps memory pages to bytes on disk in the 
 there's a page fault for memory-mapped file, the kernel puts the calling thread to sleep and makes
 the hard drive seek to the appropriate block and read the data. Without extra copy between kernel
 space and user space, `mmap(2)` should potentially perform faster than traditional `read(2)/write(2)`,
-however, studies suggest that the performance of `mmap` is unstable, especially for small files.
+however, studies suggest that the performance of `mmap(2)` is unstable, especially for small files.
 But, for large files, once the files are mapped into memory, we can manipulate it as a large array
 which is handy for some cases. Using `read(2)/write(2)`, however, we can only access the file per
 buffer size each time and iterate for multiple times in order to get its full content. Arguably, we
@@ -153,9 +153,9 @@ alternatives to perform file I/O that defers most responsibilities to user. See 
 thread](https://www.scylladb.com/2017/10/05/io-access-methods-scylla/).
 
 
-## Perform file I/O using `mmap`
+## Perform file I/O using `mmap(2)`
 
-In this simple example, we will illustrate how to use `mmap` system call to perform file I/O. See
+In this simple example, we will illustrate how to use `mmap(2)` system call to perform file I/O. See
 `mmapread.cc`
 
 ```bash
@@ -193,7 +193,7 @@ bash benchmark.sh
 ```
 
 We run the micro benchmark on a Mac equipped with SSD and observe that there're large number of page
-faults when copying data using `mmap` and do not see any performance gain compared to
+faults when copying data using `mmap(2)` and do not see any performance gain compared to
 copy using `fread(3)/fwrite(3)`, except that it simplifies application codes under certain scenarios.
 
 
