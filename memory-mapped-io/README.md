@@ -169,7 +169,7 @@ mmapcopy /path/to/source/file /path/to/destination/file
 
 ## Micro benchmark
 
-To have a sense of the performance between `read(2)/write(2)` and `mmap`, I also implemented a simple
+To have a sense of the performance between `read(2)/write(2)` and `mmap(2)`, I also implemented a simple
 file copy program using C (see `fcopy.c`) that calls `fread(3)` and `fwrite(3)` system calls where
 each call reads/writes 4KB data.
 
