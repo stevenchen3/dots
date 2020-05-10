@@ -6,9 +6,11 @@
 // To compile: clang -o fcopy fcopy.c
 int main(int argc, char **argv) {
   struct stat st;
+  // Using library calls: buffered I/O
   FILE *src_fptr = fopen(argv[1], "r");
   FILE *dst_fptr = fopen(argv[2], "w");
 
+  assert(src_fptr != NULL && dst_fptr != NULL);
   assert(stat(argv[1], &st) != -1);
   assert(stat(argv[2], &st) != -1);
 
